@@ -88,4 +88,9 @@ public class OsuImpl implements Osu {
       return 0;
     }
   }
+  
+  @Override
+  public void pollIngameStatus(OsuUser player) {
+    bot.pollIngameStatus(player);
+  }
 }

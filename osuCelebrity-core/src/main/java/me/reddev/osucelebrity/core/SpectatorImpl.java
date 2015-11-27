@@ -21,6 +21,8 @@ import me.reddev.osucelebrity.osu.OsuStatus;
 import me.reddev.osucelebrity.osu.OsuStatus.Type;
 import me.reddev.osucelebrity.osu.OsuUser;
 import me.reddev.osucelebrity.osu.PlayerActivity;
+import me.reddev.osucelebrity.osu.PlayerStatus;
+import me.reddev.osucelebrity.osu.PlayerStatus.PlayerStatusType;
 import me.reddev.osucelebrity.osuapi.ApiUser;
 import me.reddev.osucelebrity.osuapi.OsuApi;
 import me.reddev.osucelebrity.twitch.Twitch;
@@ -34,6 +36,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
 import java.util.function.ToDoubleFunction;
 
 import javax.annotation.Nonnull;
@@ -61,6 +64,8 @@ public class SpectatorImpl implements Spectator, Runnable {
   final PersistenceManagerFactory pmf;
 
   final OsuApi osuApi;
+  
+  final ExecutorService exec;
 
   boolean run = true;
 
@@ -102,7 +107,7 @@ public class SpectatorImpl implements Spectator, Runnable {
     long time = clock.getTime();
 
     if (current.isPresent()) {
-      SkipReason shouldSkip = status.shouldSkip();
+      SkipReason shouldSkip = status.shouldSkip(current.get());
       if (shouldSkip != null) {
         if (advance(pm, queue)) {
           twitch.announcePlayerSkipped(shouldSkip, current.get().getPlayer());
@@ -130,23 +135,39 @@ public class SpectatorImpl implements Spectator, Runnable {
 
   class Status {
     long lastStatusChange = -1;
-    OsuStatus lastStatus;
+    OsuStatus lastStatus = null;
+    PlayerStatus ingameStatus = null;
+    long lastIngameStatusPoll = Long.MIN_VALUE;
 
     @SuppressFBWarnings(value = "NP",
         justification = "lastStatus = currentStatus raises a weird bug")
-    SkipReason shouldSkip() {
+    SkipReason shouldSkip(QueuedPlayer player) {
       OsuStatus currentStatus = osu.getClientStatus();
       try {
         if (lastStatusChange == -1 || !Objects.equal(currentStatus, lastStatus)) {
           lastStatusChange = clock.getTime();
           return null;
         }
+        if (currentStatus != null && currentStatus.getType() == Type.PLAYING) {
+          return null;
+        }
+        if (lastIngameStatusPoll < clock.getTime() - 1000) {
+          lastIngameStatusPoll = clock.getTime();
+          exec.submit(() -> osu.pollIngameStatus(player.getPlayer()));
+        }
         if (currentStatus == null
             && lastStatusChange <= clock.getTime() - settings.getOfflineTimeout()) {
           return SkipReason.OFFLINE;
         }
+        long idleTimeout = settings.getIdleTimeout();
+        if (ingameStatus != null && ingameStatus.getType() == PlayerStatusType.PLAYING) {
+          idleTimeout *= 2;
+        }
+        if (ingameStatus != null && ingameStatus.getType() == PlayerStatusType.AFK) {
+          idleTimeout /= 2;
+        }
         if (currentStatus != null && currentStatus.getType() == Type.WATCHING
-            && lastStatusChange <= clock.getTime() - settings.getIdleTimeout()) {
+            && lastStatusChange <= clock.getTime() - idleTimeout) {
           return SkipReason.IDLE;
         }
         return null;
@@ -238,11 +259,13 @@ public class SpectatorImpl implements Spectator, Runnable {
     ApiUser userData =
         osuApi.getUserData(user.getPlayer().getUserId(), user.getPlayer().getGameMode(), pm, 0L);
     if (userData == null || userData.getPlayCount() < settings.getMinPlayCount()) {
+      log.debug("{}'s playcount is too low", user.getPlayer().getUserName());
       return EnqueueResult.FAILURE;
     }
     PlayerActivity activity = osuApi.getPlayerActivity(userData, pm, 1L);
     if (!selfqueue && activity.getLastActivity() < clock.getTime()
         - settings.getMaxLastActivity()) {
+      log.debug("{} has not been active", user.getPlayer().getUserName());
       return EnqueueResult.FAILURE;
     }
     return doEnqueue(pm, user, selfqueue, twitchUser);
@@ -492,6 +515,10 @@ public class SpectatorImpl implements Spectator, Runnable {
   @Override
   public synchronized void removeFromQueue(PersistenceManager pm, OsuUser player) {
     PlayerQueue queue = PlayerQueue.loadQueue(pm, clock);
+    doRemoveFromQueue(pm, player, queue);
+  }
+
+  private void doRemoveFromQueue(PersistenceManager pm, OsuUser player, PlayerQueue queue) {
     Optional<QueuedPlayer> current = queue.currentlySpectating();
     if (current.isPresent()) {
       if (current.get().getPlayer().equals(player)) {
@@ -557,10 +584,23 @@ public class SpectatorImpl implements Spectator, Runnable {
   }
   
   @Override
-  public void userOffline(PersistenceManager pm, OsuUser osuUser) {
-    /*
-     *  Just remove them from the queue. We can refine this behaviour later. 
-     */
-    removeFromQueue(pm, osuUser);
+  public synchronized void reportStatus(PersistenceManager pm, PlayerStatus status) {
+    PlayerQueue queue = null;
+    if (status.getType() == PlayerStatusType.OFFLINE) {
+      // Just remove them from the queue. We can refine this behaviour later.
+      queue = PlayerQueue.loadQueue(pm, clock);
+      removeFromQueue(pm, status.getUser());
+    }
+    if (queue == null) {
+      queue = PlayerQueue.loadQueue(pm, clock);
+    }
+    Optional<QueuedPlayer> current = queue.currentlySpectating();
+    if (current.isPresent() && current.get().getPlayer().equals(status.getUser())) {
+      if (this.status.ingameStatus != null
+          && this.status.ingameStatus.getReceivedAt() > status.getReceivedAt()) {
+        return;
+      }
+      this.status.ingameStatus = status;
+    }
   }
 }

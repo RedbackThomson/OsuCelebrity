@@ -1,5 +1,7 @@
 package me.reddev.osucelebrity.core;
 
+import me.reddev.osucelebrity.osu.PlayerStatus.PlayerStatusType;
+import me.reddev.osucelebrity.osu.PlayerStatus;
 import me.reddev.osucelebrity.core.QueuedPlayer.QueueSource;
 import me.reddev.osucelebrity.osu.PlayerActivity;
 import static org.junit.Assert.*;
@@ -26,6 +28,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
 
 import javax.jdo.PersistenceManager;
 
@@ -37,6 +40,8 @@ public class SpectatorImplTest extends AbstractJDOTest {
   private Osu osu;
   @Mock
   private CoreSettings settings;
+  @Mock
+  private ExecutorService exec;
 
   Clock clock = new MockClock();
   OsuApi api = new MockOsuApi();
@@ -59,7 +64,12 @@ public class SpectatorImplTest extends AbstractJDOTest {
     when(settings.getMaxLastActivity()).thenReturn(24L * 60 * 60 * 1000);
     when(osu.getClientStatus()).thenReturn(new OsuStatus(Type.PLAYING, ""));
     
-    spectator = new SpectatorImpl(twitch, clock, osu, settings, pmf, api);
+    when(exec.submit(any(Runnable.class))).thenAnswer(arg -> {
+      ((Runnable) arg.getArguments()[0]).run();
+      return null;
+    });
+    
+    spectator = new SpectatorImpl(twitch, clock, osu, settings, pmf, api, exec);
   }
 
   QueuedPlayer getUser(PersistenceManager pm, String playerName) throws IOException {
@@ -390,16 +400,21 @@ public class SpectatorImplTest extends AbstractJDOTest {
     spectator.loop(pm);
 
     when(osu.getClientStatus()).thenReturn(new OsuStatus(Type.WATCHING, ""));
-    for (; clock.getTime() < settings.getIdleTimeout(); clock.sleepUntil(clock.getTime() + 1000)) {
-      spectator.loop(pm);
-      assertEquals("user1", spectator.getCurrentPlayer(pm).getPlayer().getUserName());
-    }
+    assertSpectatingUntil(pm, player1.getPlayer(), settings.getIdleTimeout());
 
     spectator.loop(pm);
 
     assertEquals("user2", spectator.getCurrentPlayer(pm).getPlayer().getUserName());
 
     verify(twitch).announcePlayerSkipped(SkipReason.IDLE, player1.getPlayer());
+  }
+
+  private void assertSpectatingUntil(PersistenceManager pm, OsuUser player, long until)
+      throws InterruptedException {
+    for (; clock.getTime() < until; clock.sleepUntil(clock.getTime() + 1000)) {
+      spectator.loop(pm);
+      assertEquals(player, spectator.getCurrentPlayer(pm).getPlayer());
+    }
   }
 
   @Test
@@ -433,7 +448,7 @@ public class SpectatorImplTest extends AbstractJDOTest {
   void testAutoQueueDistribution() throws Exception {
     List<ApiUser> recentlyActive = new ArrayList<>();
     Map<Integer, Long> lastQueueTime = new HashMap<>();
-    SpectatorImpl spectator = new SpectatorImpl(twitch, clock, osu, settings, pmf, api) {
+    SpectatorImpl spectator = new SpectatorImpl(twitch, clock, osu, settings, pmf, api, exec) {
       @Override
       List<ApiUser> getRecentlyActive(PersistenceManager pm) {
         return recentlyActive;
@@ -503,7 +518,7 @@ public class SpectatorImplTest extends AbstractJDOTest {
   }
   
   @Test
-  public void testSkipTolerance() throws Exception {
+  public void testSkipNameTolerance() throws Exception {
     PersistenceManager pm = pmf.getPersistenceManager();
     spectator.enqueue(pm, getUser(pm, "thatname"), false);
     spectator.loop(pm);
@@ -512,7 +527,7 @@ public class SpectatorImplTest extends AbstractJDOTest {
   }
   
   @Test
-  public void testSkipToleranceFail() throws Exception {
+  public void testSkipNameToleranceFail() throws Exception {
     PersistenceManager pm = pmf.getPersistenceManager();
     spectator.enqueue(pm, getUser(pm, "thatname"), false);
     spectator.loop(pm);
@@ -662,5 +677,101 @@ public class SpectatorImplTest extends AbstractJDOTest {
     assertEquals(0d, SpectatorImpl.penalty(10, 10), 0d);
     assertEquals(.2, SpectatorImpl.penalty(10, 20), 0d);
     assertEquals(.3, SpectatorImpl.penalty(10, 40), 1E-15);
+  }
+
+  @Test
+  public void testReportStatus() throws Exception {
+    PersistenceManager pm = pmf.getPersistenceManager();
+    OsuUser tillerino = api.getUser("Tillerino", pm, 0);
+
+    spectator.reportStatus(pm, new PlayerStatus(tillerino, PlayerStatusType.PLAYING, 0));
+    
+    assertNull(spectator.status.ingameStatus);
+    
+    spectator.promote(pm, tillerino);
+
+    spectator.reportStatus(pm, new PlayerStatus(tillerino, PlayerStatusType.IDLE, 10));
+    assertEquals(new PlayerStatus(tillerino, PlayerStatusType.IDLE, 0), spectator.status.ingameStatus);
+
+    spectator.reportStatus(pm, new PlayerStatus(tillerino, PlayerStatusType.PLAYING, 20));
+    assertEquals(new PlayerStatus(tillerino, PlayerStatusType.PLAYING, 0), spectator.status.ingameStatus);
+
+    spectator.reportStatus(pm, new PlayerStatus(tillerino, PlayerStatusType.OFFLINE, 0));
+    assertEquals(PlayerStatusType.PLAYING, spectator.status.ingameStatus.getType());
+    
+    spectator.reportStatus(pm, new PlayerStatus(api.getUser("someotherguy", pm, 0), PlayerStatusType.AFK, 0));
+    assertEquals(PlayerStatusType.PLAYING, spectator.status.ingameStatus.getType());
+  }
+  
+  @Test
+  public void testPollStatus() throws Exception {
+    PersistenceManager pm = pmf.getPersistenceManager();
+    when(osu.getClientStatus()).thenReturn(new OsuStatus(Type.WATCHING, ""));
+
+    QueuedPlayer queued = getUser(pm, "wontplay");
+    spectator.enqueue(pm, queued, false);
+    
+    // advance queue
+    spectator.loop(pm);
+    // get client status
+    spectator.loop(pm);
+    // poll for ingame status
+    spectator.loop(pm);
+    
+    verify(osu, times(1)).pollIngameStatus(queued.getPlayer());
+  }
+  
+  @Test
+  public void testPlayerAfk() throws Exception {
+    PersistenceManager pm = pmf.getPersistenceManager();
+    when(osu.getClientStatus()).thenReturn(new OsuStatus(Type.WATCHING, ""));
+
+    QueuedPlayer queued = getUser(pm, "wontplay");
+    QueuedPlayer next = getUser(pm, "next");
+    spectator.enqueue(pm, queued, false);
+    spectator.enqueue(pm, next, false);
+    
+    doAnswer(
+        x -> {
+          spectator.reportStatus(pm, new PlayerStatus(queued.getPlayer(), PlayerStatusType.AFK,
+              clock.getTime()));
+          return null;
+        }).when(osu).pollIngameStatus(queued.getPlayer());
+    
+    // advance queue
+    spectator.loop(pm);
+    
+    assertSpectatingUntil(pm, queued.getPlayer(), settings.getIdleTimeout() / 2);
+    
+    spectator.loop(pm);
+    
+    assertEquals(next.getPlayer(), spectator.getCurrentPlayer(pm).getPlayer());
+  }
+  
+  @Test
+  public void testPlayerActuallyPlaying() throws Exception {
+    PersistenceManager pm = pmf.getPersistenceManager();
+    when(osu.getClientStatus()).thenReturn(new OsuStatus(Type.WATCHING, ""));
+
+    QueuedPlayer queued = getUser(pm, "wontplay");
+    QueuedPlayer next = getUser(pm, "next");
+    spectator.enqueue(pm, queued, false);
+    spectator.enqueue(pm, next, false);
+    
+    doAnswer(
+        x -> {
+          spectator.reportStatus(pm, new PlayerStatus(queued.getPlayer(), PlayerStatusType.PLAYING,
+              clock.getTime()));
+          return null;
+        }).when(osu).pollIngameStatus(queued.getPlayer());
+    
+    // advance queue
+    spectator.loop(pm);
+    
+    assertSpectatingUntil(pm, queued.getPlayer(), settings.getIdleTimeout() * 2);
+    
+    spectator.loop(pm);
+    
+    assertEquals(next.getPlayer(), spectator.getCurrentPlayer(pm).getPlayer());
   }
 }

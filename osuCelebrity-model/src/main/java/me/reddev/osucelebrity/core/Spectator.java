@@ -3,6 +3,7 @@ package me.reddev.osucelebrity.core;
 import me.reddev.osucelebrity.PassAndReturnNonnull;
 import me.reddev.osucelebrity.core.api.DisplayQueuePlayer;
 import me.reddev.osucelebrity.osu.OsuUser;
+import me.reddev.osucelebrity.osu.PlayerStatus;
 
 import java.io.IOException;
 import java.util.List;
@@ -125,5 +126,5 @@ public interface Spectator {
    * @param pm the current request's persistence manager
    * @param osuUser the offline player
    */
-  void userOffline(PersistenceManager pm, OsuUser osuUser);
+  void reportStatus(PersistenceManager pm, PlayerStatus status);
 }

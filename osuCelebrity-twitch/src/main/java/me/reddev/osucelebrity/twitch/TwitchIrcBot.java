@@ -3,6 +3,7 @@ package me.reddev.osucelebrity.twitch;
 import static me.reddev.osucelebrity.Commands.DOWNVOTE;
 import static me.reddev.osucelebrity.Commands.FORCESKIP;
 import static me.reddev.osucelebrity.Commands.FORCESPEC;
+import static me.reddev.osucelebrity.Commands.NOW_PLAYING;
 import static me.reddev.osucelebrity.Commands.POSITION;
 import static me.reddev.osucelebrity.Commands.QUEUE;
 import static me.reddev.osucelebrity.Commands.UPVOTE;
@@ -19,6 +20,9 @@ import me.reddev.osucelebrity.core.QueuedPlayer;
 import me.reddev.osucelebrity.core.QueuedPlayer.QueueSource;
 import me.reddev.osucelebrity.core.Spectator;
 import me.reddev.osucelebrity.core.VoteType;
+import me.reddev.osucelebrity.osu.Osu;
+import me.reddev.osucelebrity.osu.OsuStatus;
+import me.reddev.osucelebrity.osu.OsuStatus.Type;
 import me.reddev.osucelebrity.osu.OsuUser;
 import me.reddev.osucelebrity.osuapi.OsuApi;
 
@@ -57,6 +61,8 @@ public class TwitchIrcBot extends ListenerAdapter<PircBotX> implements Runnable 
   private final OsuApi osuApi;
 
   private final Twitch twitch;
+  
+  private final Osu osu;
 
   private final PersistenceManagerFactory pmf;
 
@@ -74,6 +80,7 @@ public class TwitchIrcBot extends ListenerAdapter<PircBotX> implements Runnable 
     handlers.add(this::handleQueue);
     handlers.add(this::handleVote);
     handlers.add(this::handlePosition);
+    handlers.add(this::handleNowPlaying);
   }
   
   private final List<CommandHandler> modHandlers = new ArrayList<>();
@@ -265,6 +272,23 @@ public class TwitchIrcBot extends ListenerAdapter<PircBotX> implements Runnable 
     }
     
     return false;
+  }
+  
+  boolean handleNowPlaying(MessageEvent<PircBotX> event, String message, String twitchUserName,
+      PersistenceManager pm) throws UserException, IOException {
+    if (!StringUtils.startsWithIgnoreCase(message, NOW_PLAYING)) {
+      return false;
+    }
+    
+    QueuedPlayer player = spectator.getCurrentPlayer(pm);
+    
+    OsuStatus status = osu.getClientStatus();
+    if (player != null && status != null && status.getType() == Type.PLAYING) {
+      event.getChannel().send().message(String.format(OsuResponses.NOW_PLAYING, 
+          player.getPlayer().getUserName(), status.getDetail()));
+    }
+    
+    return true;
   }
 
   @Override 

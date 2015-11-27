@@ -1,12 +1,21 @@
 package me.reddev.osucelebrity.twitch;
 
 import static org.mockito.Mockito.*;
+
+import java.io.IOException;
+
+import javax.jdo.PersistenceManager;
+
 import me.reddev.osucelebrity.AbstractJDOTest;
+import me.reddev.osucelebrity.core.Clock;
 import me.reddev.osucelebrity.core.EnqueueResult;
 import me.reddev.osucelebrity.core.MockClock;
 import me.reddev.osucelebrity.core.QueuedPlayer;
 import me.reddev.osucelebrity.core.Spectator;
 import me.reddev.osucelebrity.core.VoteType;
+import me.reddev.osucelebrity.osu.Osu;
+import me.reddev.osucelebrity.osu.OsuStatus;
+import me.reddev.osucelebrity.osu.OsuUser;
 import me.reddev.osucelebrity.core.QueuedPlayer.QueueSource;
 import me.reddev.osucelebrity.osuapi.MockOsuApi;
 
@@ -39,6 +48,8 @@ public class TwitchIrcBotTest extends AbstractJDOTest {
   @Mock
   OutputChannel outputChannel;
   @Mock
+  Osu osu;
+  @Mock
   PircBotX bot;
   @Mock
   Configuration<PircBotX> configuration;
@@ -46,6 +57,7 @@ public class TwitchIrcBotTest extends AbstractJDOTest {
   ListenerManager<PircBotX> listenerManager;
 
   MockOsuApi api = new MockOsuApi();
+  Clock clock = new MockClock();
 
   TwitchIrcBot ircBot;
 
@@ -58,10 +70,17 @@ public class TwitchIrcBotTest extends AbstractJDOTest {
     when(user.getNick()).thenReturn("twitchIrcUser");
     when(user.send()).thenReturn(outputUser);
     when(channel.send()).thenReturn(outputChannel);
+    when(spectator.getCurrentPlayer(any()))
+        .thenReturn(getUser(pmf.getPersistenceManagerProxy(), "testplayer"));
 
     when(settings.getTwitchIrcCommand()).thenReturn("!");
 
-    ircBot = new TwitchIrcBot(settings, api, null, pmf, spectator, new MockClock());
+    ircBot = new TwitchIrcBot(settings, api, null, osu, pmf, spectator, new MockClock());
+  }
+  
+  QueuedPlayer getUser(PersistenceManager pm, String playerName) {
+    OsuUser user = api.getUser(playerName, pm, 0);
+    return new QueuedPlayer(user, null, clock.getTime());
   }
 
   @Test
@@ -114,5 +133,33 @@ public class TwitchIrcBotTest extends AbstractJDOTest {
     
     verify(spectator).promote(any(), 
         eq(api.getUser("x", pmf.getPersistenceManagerProxy(), 0)));
+  }
+  
+  @Test
+  public void testNowPlaying() throws Exception {    
+    when(osu.getClientStatus()).thenReturn(
+        new OsuStatus(OsuStatus.Type.PLAYING, "Hatsune Miku - Senbonzakura (Short Ver.) [Rin]"));
+    
+    ircBot.onMessage(new MessageEvent<PircBotX>(bot, channel, user, "!np"));
+    
+    verify(outputChannel).message(any());
+  }
+  
+  @Test
+  public void testNowPlayingOnlyWatching() throws Exception {    
+    when(osu.getClientStatus()).thenReturn(
+        new OsuStatus(OsuStatus.Type.WATCHING, "SomePlayer"));
+    
+    ircBot.onMessage(new MessageEvent<PircBotX>(bot, channel, user, "!np"));
+    
+    verify(outputChannel, never()).message(any());
+  }
+  
+  @Test
+  public void testNotNowPlaying() throws Exception {
+    when(osu.getClientStatus()).thenReturn(null);
+    ircBot.onMessage(new MessageEvent<PircBotX>(bot, channel, user, "!np"));
+    
+    verify(outputChannel, never()).message(any());
   }
 }

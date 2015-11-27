@@ -85,4 +85,11 @@ public interface Osu {
    * @return 0 if unknown.
    */
   public long lastActivity(PersistenceManager pm, OsuUser player);
+  
+  /**
+   * Poll for the ingame status of a player.
+   * 
+   * @param player the target player.
+   */
+  public void pollIngameStatus(OsuUser player);
 }

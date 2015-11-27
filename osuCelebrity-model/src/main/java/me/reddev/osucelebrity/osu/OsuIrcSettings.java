@@ -16,4 +16,6 @@ public interface OsuIrcSettings {
   String getOsuIrcCommand();
 
   String getOsuIrcAutoJoin();
+  
+  boolean isOsuIrcSilenced();
 }
