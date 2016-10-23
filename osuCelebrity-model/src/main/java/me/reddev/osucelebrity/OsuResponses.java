@@ -25,7 +25,7 @@ public class OsuResponses extends Responses {
   
   public static final String POSITION = "%s is position #%d in the queue.";
   public static final String NOT_IN_QUEUE = "%s is not in the queue.";
-  public static final String NOW_PLAYING = "%s (https://osu.ppy.sh/u/%d) is currently playing %s";
+  public static final String NOW_PLAYING = "%s ( https://osu.ppy.sh/u/%d ) is currently playing %s";
   
   /*
    * Spectate-cycle notifications
