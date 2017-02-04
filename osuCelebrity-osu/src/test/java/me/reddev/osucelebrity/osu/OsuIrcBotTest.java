@@ -65,9 +65,9 @@ public class OsuIrcBotTest extends AbstractJDOTest {
   @Mock
   PircBotX bot;
   @Mock
-  Configuration<PircBotX> configuration;
+  Configuration configuration;
   @Mock
-  ListenerManager<PircBotX> listenerManager;
+  ListenerManager listenerManager;
   @Mock
   OsuIrcSettings settings;
   @Mock
@@ -88,7 +88,7 @@ public class OsuIrcBotTest extends AbstractJDOTest {
     when(bot.getConfiguration()).thenReturn(configuration);
     when(configuration.getListenerManager()).thenReturn(listenerManager);
     when(user.getNick()).thenReturn("osuIrcUser");
-    
+
     osuIrcUser = osuApi.getUser(user.getNick(), pm, 0);
 
     when(settings.getOsuIrcCommand()).thenReturn("!");
@@ -128,7 +128,7 @@ public class OsuIrcBotTest extends AbstractJDOTest {
   public void testSelfQueue() throws Exception {
     when(spectator.enqueue(any(), any(), eq(true), any(), eq(true))).thenReturn(EnqueueResult.SUCCESS);
 
-    ircBot.onPrivateMessage(new PrivateMessageEvent<PircBotX>(bot, user, "!spec"));
+    ircBot.onPrivateMessage(new PrivateMessageEvent(bot, user, user, "!spec"));
 
     ArgumentCaptor<QueuedPlayer> captor = ArgumentCaptor.forClass(QueuedPlayer.class);
 
@@ -147,7 +147,7 @@ public class OsuIrcBotTest extends AbstractJDOTest {
     when(spectator.enqueue(any(), any(), eq(true), any(), eq(true))).thenReturn(
         EnqueueResult.FAILURE);
 
-    ircBot.onPrivateMessage(new PrivateMessageEvent<PircBotX>(bot, user, "!spec"));
+    ircBot.onPrivateMessage(new PrivateMessageEvent(bot, user, user, "!spec"));
 
     verify(spectator, only()).enqueue(any(), any(), eq(true),
         eq("osu:" + osuApi.getUser("osuIrcUser", pm, 0L).getUserId()), eq(true));
@@ -159,7 +159,7 @@ public class OsuIrcBotTest extends AbstractJDOTest {
   public void testSkip() throws Exception {
     osuApi.getUser("osuIrcUser", pm, 0).setPrivilege(Privilege.MOD);
 
-    ircBot.onPrivateMessage(new PrivateMessageEvent<PircBotX>(bot, user, "!forceskip x"));
+    ircBot.onPrivateMessage(new PrivateMessageEvent(bot, user, user, "!forceskip x"));
 
     verify(spectator, only()).advanceConditional(any(),
         eq("x"));
@@ -171,7 +171,7 @@ public class OsuIrcBotTest extends AbstractJDOTest {
   public void testSpecSilent() throws Exception {
     osuApi.getUser("osuIrcUser", pm, 0).setPrivilege(Privilege.MOD);
 
-    ircBot.onPrivateMessage(new PrivateMessageEvent<PircBotX>(bot, user, "!specsilent x"));
+    ircBot.onPrivateMessage(new PrivateMessageEvent(bot, user, user, "!specsilent x"));
 
     verify(spectator, only()).performEnqueue(any(),
         eq(new QueuedPlayer(osuApi.getUser("x", pm, 0L), QueueSource.AUTO, 0L)), eq(null), any(),
@@ -180,7 +180,7 @@ public class OsuIrcBotTest extends AbstractJDOTest {
 
   @Test
   public void testSkipUnauthorized() throws Exception {
-    ircBot.onPrivateMessage(new PrivateMessageEvent<PircBotX>(bot, user, "!forceskip x"));
+    ircBot.onPrivateMessage(new PrivateMessageEvent(bot, user, user, "!forceskip x"));
 
     verifyZeroInteractions(spectator);
 
@@ -191,12 +191,12 @@ public class OsuIrcBotTest extends AbstractJDOTest {
   public void testMuting() throws Exception {
     assertTrue(osuApi.getUser("osuIrcUser", pmf.getPersistenceManager(), 0).isAllowsNotifications());
 
-    ircBot.onPrivateMessage(new PrivateMessageEvent<PircBotX>(bot, user, "!mute"));
+    ircBot.onPrivateMessage(new PrivateMessageEvent(bot, user, user, "!mute"));
 
     assertFalse(osuApi.getUser("osuIrcUser", pmf.getPersistenceManager(), 0)
         .isAllowsNotifications());
 
-    ircBot.onPrivateMessage(new PrivateMessageEvent<PircBotX>(bot, user, "!unmute"));
+    ircBot.onPrivateMessage(new PrivateMessageEvent(bot, user, user, "!unmute"));
 
     assertTrue(osuApi.getUser("osuIrcUser", pmf.getPersistenceManager(), 0).isAllowsNotifications());
   }
@@ -205,20 +205,20 @@ public class OsuIrcBotTest extends AbstractJDOTest {
   public void testOpting() throws Exception {
     assertTrue(osuApi.getUser("osuIrcUser", pmf.getPersistenceManager(), 0).isAllowsSpectating());
 
-    ircBot.onPrivateMessage(new PrivateMessageEvent<PircBotX>(bot, user, "!optout"));
+    ircBot.onPrivateMessage(new PrivateMessageEvent(bot, user, user, "!optout"));
 
     assertFalse(osuApi.getUser("osuIrcUser", pmf.getPersistenceManager(), 0).isAllowsSpectating());
     verify(spectator).removeFromQueue(any(),
         eq(osuApi.getUser("osuIrcUser", pmf.getPersistenceManager(), 0)));
 
-    ircBot.onPrivateMessage(new PrivateMessageEvent<PircBotX>(bot, user, "!optin"));
+    ircBot.onPrivateMessage(new PrivateMessageEvent(bot, user, user, "!optin"));
 
     assertTrue(osuApi.getUser("osuIrcUser", pmf.getPersistenceManager(), 0).isAllowsSpectating());
   }
 
   @Test
   public void testUserNamesParser() throws Exception {
-    ircBot.onServerResponse(new ServerResponseEvent<PircBotX>(bot, 353,
+    ircBot.onServerResponse(new ServerResponseEvent(bot, 353,
         ":irc.server.net 353 Phyre = #SomeChannel :@me +you them", ImmutableList
             .copyOf(new String[] {"#SomeChannel", "+me @you them"})));
 
@@ -227,19 +227,19 @@ public class OsuIrcBotTest extends AbstractJDOTest {
   
   @Test
   public void testJoinQuit() throws Exception {
-    ircBot.onJoin(new JoinEvent<PircBotX>(bot, channel, user));
+    ircBot.onJoin(new JoinEvent(bot, channel, user, user));
 
     assertTrue(ircBot.getOnlineUsers().contains("osuIrcUser"));
 
-    ircBot.onQuit(new QuitEvent<PircBotX>(bot, new UserChannelDaoSnapshot(bot, null, null, null,
-        null, null, null), new UserSnapshot(user), "no reason"));
+    ircBot.onQuit(new QuitEvent(bot, new UserChannelDaoSnapshot(bot, null, null, null,
+        null, null, null), user, new UserSnapshot(user), "no reason"));
 
     assertFalse(ircBot.getOnlineUsers().contains("osuIrcUser"));
   }
 
   @Test
   public void testQueue() throws Exception {
-    ircBot.onPrivateMessage(new PrivateMessageEvent<PircBotX>(bot, user, "!spec thatguy"));
+    ircBot.onPrivateMessage(new PrivateMessageEvent(bot, user, user, "!spec thatguy"));
 
     OsuUser requestedUser = osuApi.getUser("thatguy", pmf.getPersistenceManager(), 0);
 
@@ -250,7 +250,7 @@ public class OsuIrcBotTest extends AbstractJDOTest {
   
   @Test
   public void testQueueWithComment() throws Exception {
-    ircBot.onPrivateMessage(new PrivateMessageEvent<PircBotX>(bot, user,
+    ircBot.onPrivateMessage(new PrivateMessageEvent(bot, user, user,
         "!spec FrenzyLi: because I want to"));
 
     OsuUser requestedUser = osuApi.getUser("FrenzyLi", pmf.getPersistenceManager(), 0);
@@ -262,7 +262,7 @@ public class OsuIrcBotTest extends AbstractJDOTest {
 
   @Test
   public void testQueueAlias() throws Exception {
-    ircBot.onPrivateMessage(new PrivateMessageEvent<PircBotX>(bot, user, "!vote thatguy"));
+    ircBot.onPrivateMessage(new PrivateMessageEvent(bot, user, user, "!vote thatguy"));
 
     OsuUser requestedUser = osuApi.getUser("thatguy", pmf.getPersistenceManager(), 0);
 
@@ -275,7 +275,7 @@ public class OsuIrcBotTest extends AbstractJDOTest {
   public void testForceSpec() throws Exception {
     osuApi.getUser("osuIrcUser", pm, 0).setPrivilege(Privilege.MOD);
 
-    ircBot.onPrivateMessage(new PrivateMessageEvent<PircBotX>(bot, user, "!forcespec x"));
+    ircBot.onPrivateMessage(new PrivateMessageEvent(bot, user, user, "!forcespec x"));
     
     verify(spectator).promote(any(), 
         eq(osuApi.getUser("x", pmf.getPersistenceManagerProxy(), 0)));
@@ -283,7 +283,7 @@ public class OsuIrcBotTest extends AbstractJDOTest {
   
   @Test
   public void testForceSpecUnauthorized() throws Exception {
-    ircBot.onPrivateMessage(new PrivateMessageEvent<PircBotX>(bot, user, "!forcespec x"));
+    ircBot.onPrivateMessage(new PrivateMessageEvent(bot, user, user, "!forcespec x"));
     
     verify(spectator, times(0)).promote(any(), 
         eq(osuApi.getUser("x", pmf.getPersistenceManagerProxy(), 0)));
@@ -293,33 +293,33 @@ public class OsuIrcBotTest extends AbstractJDOTest {
   public void testFixClient() throws Exception {
     osuApi.getUser("osuIrcUser", pm, 0).setPrivilege(Privilege.MOD);
 
-    ircBot.onPrivateMessage(new PrivateMessageEvent<PircBotX>(bot, user, "!fix"));
+    ircBot.onPrivateMessage(new PrivateMessageEvent(bot, user, user, "!fix"));
     
     verify(osu).restartClient();
   }
   
   @Test
   public void testFixClientUnauthorized() throws Exception {
-    ircBot.onPrivateMessage(new PrivateMessageEvent<PircBotX>(bot, user, "!fix"));
+    ircBot.onPrivateMessage(new PrivateMessageEvent(bot, user, user, "!fix"));
     
     verify(osu, times(0)).restartClient();
   }
   
   @Test
   public void testGameMode() throws Exception {
-    ircBot.onPrivateMessage(new PrivateMessageEvent<PircBotX>(bot, user, "!gamemode ctb"));
+    ircBot.onPrivateMessage(new PrivateMessageEvent(bot, user, user, "!gamemode ctb"));
 
     assertEquals(GameModes.CTB, osuApi.getUser("osuIrcUser", pmf.getPersistenceManager(), 0)
         .getGameMode());
-    ircBot.onPrivateMessage(new PrivateMessageEvent<PircBotX>(bot, user, "!gamemode taiko"));
+    ircBot.onPrivateMessage(new PrivateMessageEvent(bot, user, user, "!gamemode taiko"));
 
     assertEquals(GameModes.TAIKO, osuApi.getUser("osuIrcUser", pmf.getPersistenceManager(), 0)
         .getGameMode());
-    ircBot.onPrivateMessage(new PrivateMessageEvent<PircBotX>(bot, user, "!gamemode mania"));
+    ircBot.onPrivateMessage(new PrivateMessageEvent(bot, user, user, "!gamemode mania"));
 
     assertEquals(GameModes.MANIA, osuApi.getUser("osuIrcUser", pmf.getPersistenceManager(), 0)
         .getGameMode());
-    ircBot.onPrivateMessage(new PrivateMessageEvent<PircBotX>(bot, user, "!gamemode osu"));
+    ircBot.onPrivateMessage(new PrivateMessageEvent(bot, user, user, "!gamemode osu"));
 
     assertEquals(GameModes.OSU, osuApi.getUser("osuIrcUser", pmf.getPersistenceManager(), 0)
         .getGameMode());
@@ -361,7 +361,7 @@ public class OsuIrcBotTest extends AbstractJDOTest {
     String osuCommandUser = settings.getOsuCommandUser();
     when(user.getNick()).thenReturn(osuCommandUser);
 
-    ircBot.onPrivateMessage(new PrivateMessageEvent<PircBotX>(bot, user,
+    ircBot.onPrivateMessage(new PrivateMessageEvent(bot, user, user,
         "Stats for (Tillerino)[https://osu.ppy.sh/u/" + tillerino.getUserId() + "] is Playing:"));
 
     verify(spectator).reportStatus(any(),
@@ -378,7 +378,7 @@ public class OsuIrcBotTest extends AbstractJDOTest {
     
     when(user.getNick()).thenReturn("admin");
     
-    ircBot.onPrivateMessage(new PrivateMessageEvent<PircBotX>(bot, user,
+    ircBot.onPrivateMessage(new PrivateMessageEvent(bot, user, user,
         "!mod newmod"));
     
     OsuUser mod = osuApi.getUser("newmod", pmf.getPersistenceManager(), 0);
@@ -394,7 +394,7 @@ public class OsuIrcBotTest extends AbstractJDOTest {
     
     when(user.getNick()).thenReturn("notadmin");
     
-    ircBot.onPrivateMessage(new PrivateMessageEvent<PircBotX>(bot, user,
+    ircBot.onPrivateMessage(new PrivateMessageEvent(bot, user, user,
         "!mod newmod"));
     
     OsuUser mod = osuApi.getUser("newmod", pmf.getPersistenceManager(), 0);
@@ -413,7 +413,7 @@ public class OsuIrcBotTest extends AbstractJDOTest {
     String osuCommandUser = settings.getOsuCommandUser();
     when(user.getNick()).thenReturn(osuCommandUser);
 
-    ircBot.onPrivateMessage(new PrivateMessageEvent<PircBotX>(bot, user,
+    ircBot.onPrivateMessage(new PrivateMessageEvent(bot, user, user,
         "Stats for (Tillerino)[https://osu.ppy.sh/u/" + tillerino.getUserId() + "] is Playing:"));
 
     verifyNoMoreInteractions(spectator);
@@ -432,7 +432,7 @@ public class OsuIrcBotTest extends AbstractJDOTest {
       pm.makePersistent(twitchUser);
     }
     
-    ircBot.onPrivateMessage(new PrivateMessageEvent<PircBotX>(bot, user,
+    ircBot.onPrivateMessage(new PrivateMessageEvent(bot, user, user,
         "!link <LINKSTRING>"));
 
     // there is only on twitch user, so we can grab anything.
@@ -445,7 +445,7 @@ public class OsuIrcBotTest extends AbstractJDOTest {
   
   @Test
   public void testLinkNotFound() throws Exception {
-    ircBot.onPrivateMessage(new PrivateMessageEvent<PircBotX>(bot, user,
+    ircBot.onPrivateMessage(new PrivateMessageEvent(bot, user, user,
         "!link <LINKSTRING>"));
 
     verify(outputUser).message(OsuResponses.UNKNOWN_LINK);
@@ -472,7 +472,7 @@ public class OsuIrcBotTest extends AbstractJDOTest {
       pm.makePersistent(twitchUser);
     }
     
-    ircBot.onPrivateMessage(new PrivateMessageEvent<PircBotX>(bot, user,
+    ircBot.onPrivateMessage(new PrivateMessageEvent(bot, user, user,
         "!link <LINKSTRING>"));
 
     verify(outputUser).message(OsuResponses.ALREADY_LINKED);
@@ -482,7 +482,7 @@ public class OsuIrcBotTest extends AbstractJDOTest {
   public void testPosition() throws Exception {
     when(spectator.getQueuePosition(any(), eq(osuUser))).thenReturn(69);
 
-    ircBot.onPrivateMessage(new PrivateMessageEvent<PircBotX>(bot, user,
+    ircBot.onPrivateMessage(new PrivateMessageEvent(bot, user, user,
         "!position " + osuUser.getUserName()));
    
     verify(outputUser).message(String.format(OsuResponses.POSITION, "defaultUser", 69));
@@ -492,7 +492,7 @@ public class OsuIrcBotTest extends AbstractJDOTest {
   public void testPositionNotInQueue() throws Exception {
     when(spectator.getQueuePosition(any(), eq(osuUser))).thenReturn(-1);
 
-    ircBot.onPrivateMessage(new PrivateMessageEvent<PircBotX>(bot, user,
+    ircBot.onPrivateMessage(new PrivateMessageEvent(bot, user, user,
         "!position " + osuUser.getUserName()));
    
     verify(outputUser).message(String.format(OsuResponses.NOT_IN_QUEUE, "defaultUser"));
@@ -502,7 +502,7 @@ public class OsuIrcBotTest extends AbstractJDOTest {
   public void testSelfPosition() throws Exception {
     when(spectator.getQueuePosition(any(), eq(osuApi.getUser("osuIrcUser", pm, 0L)))).thenReturn(420);
     
-    ircBot.onPrivateMessage(new PrivateMessageEvent<PircBotX>(bot, user,
+    ircBot.onPrivateMessage(new PrivateMessageEvent(bot, user, user,
         "!position"));
    
     verify(outputUser).message(String.format(OsuResponses.POSITION, "osuIrcUser", 420));
@@ -512,7 +512,7 @@ public class OsuIrcBotTest extends AbstractJDOTest {
   public void testSelfPositionNotInQueue() throws Exception {
     when(spectator.getQueuePosition(any(), eq(osuApi.getUser("osuIrcUser", pm, 0L)))).thenReturn(-1);
     
-    ircBot.onPrivateMessage(new PrivateMessageEvent<PircBotX>(bot, user,
+    ircBot.onPrivateMessage(new PrivateMessageEvent(bot, user, user,
         "!position"));
    
     verify(outputUser).message(String.format(OsuResponses.NOT_IN_QUEUE, "osuIrcUser"));
@@ -522,7 +522,7 @@ public class OsuIrcBotTest extends AbstractJDOTest {
   public void testTimedOut() throws Exception {
     osuApi.getUser("osuIrcUser", pm, 0L).setTimeOutUntil(1L);
 
-    ircBot.onPrivateMessage(new PrivateMessageEvent<PircBotX>(bot, user, "!position"));
+    ircBot.onPrivateMessage(new PrivateMessageEvent(bot, user, user, "!position"));
 
     verify(outputUser).message(OsuResponses.TIMED_OUT_CURRENTLY);
   }

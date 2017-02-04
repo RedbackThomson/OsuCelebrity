@@ -10,13 +10,14 @@ import org.slf4j.Logger;
 import java.io.IOException;
 import java.net.Socket;
 import java.util.concurrent.CountDownLatch;
+import java.util.stream.Collectors;
 
-public abstract class AbstractIrcBot extends ListenerAdapter<PircBotX> implements Runnable {
+public abstract class AbstractIrcBot extends ListenerAdapter implements Runnable {
   public static class PublicSocketBot extends PircBotX {
-    public PublicSocketBot(Configuration<? extends PircBotX> configuration) {
+    public PublicSocketBot(Configuration configuration) {
       super(configuration);
     }
-    
+
     @Override
     public Socket getSocket() {
       return super.getSocket();
@@ -25,7 +26,7 @@ public abstract class AbstractIrcBot extends ListenerAdapter<PircBotX> implement
 
   private PublicSocketBot bot;
   
-  protected abstract Configuration<PircBotX> getConfiguration() throws Exception;
+  protected abstract Configuration getConfiguration() throws Exception;
   
   protected abstract Logger getLog();
   
@@ -37,9 +38,13 @@ public abstract class AbstractIrcBot extends ListenerAdapter<PircBotX> implement
   public void run() {
     try {
       bot = new PublicSocketBot(getConfiguration());
-      
-      getLog().debug("Connecting to {} as {}", bot.getConfiguration().getServerHostname(),
-          bot.getConfiguration().getLogin());
+
+      // since new pircbotx has fancy stuff with multiple servers
+      // lets also do fancy with possible multiple servers
+      String server = bot.getConfiguration().getServers().stream()
+              .map(Configuration.ServerEntry::getHostname)
+              .collect(Collectors.joining(","));
+      getLog().debug("Connecting to [{}] as {}", server, bot.getConfiguration().getLogin());
       bot.startBot();
     } catch (Exception e) {
       getLog().error("IRC error", e);
@@ -67,15 +72,15 @@ public abstract class AbstractIrcBot extends ListenerAdapter<PircBotX> implement
   }
 
   @Override
-  public void onConnect(ConnectEvent<PircBotX> event) throws Exception {
+  public void onConnect(ConnectEvent event) throws Exception {
     connectLatch.countDown();
-    getLog().debug("Connected to {} as {}", bot.getConfiguration().getServerHostname(),
+    getLog().debug("Connected to {} as {}", bot.getServerHostname(),
           bot.getConfiguration().getLogin());
   }
 
   @Override
-  public void onDisconnect(DisconnectEvent<PircBotX> event) throws Exception {
-    getLog().debug("Disconnected from {}", bot.getConfiguration().getServerHostname());
+  public void onDisconnect(DisconnectEvent event) throws Exception {
+    getLog().debug("Disconnected from {}", bot.getServerHostname());
   }
   
   public void awaitConnect() throws InterruptedException {

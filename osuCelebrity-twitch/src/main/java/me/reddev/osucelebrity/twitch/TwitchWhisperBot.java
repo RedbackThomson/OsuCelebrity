@@ -34,16 +34,17 @@ public class TwitchWhisperBot extends AbstractIrcBot {
 
   
   @Override
-  protected Configuration<PircBotX> getConfiguration() throws Exception {
-    return new Configuration.Builder<PircBotX>().setName(settings.getTwitchIrcUsername())
+  protected Configuration getConfiguration() throws Exception {
+    return new Configuration.Builder().setName(settings.getTwitchIrcUsername())
             .setLogin(settings.getTwitchIrcUsername()).addListener(this)
-            .setServer(settings.getTwitchWhisperIrcHost(), settings.getTwitchWhisperIrcPort(),
-                  settings.getTwitchToken()).setAutoReconnect(false)
+            .addServer(settings.getTwitchWhisperIrcHost(), settings.getTwitchWhisperIrcPort())
+            .setServerPassword(settings.getTwitchToken())
+            .setAutoReconnect(false)
             .addAutoJoinChannel(ROOM).buildConfiguration();
   }
 
   @Override
-  public void onConnect(ConnectEvent<PircBotX> event) throws Exception {
+  public void onConnect(ConnectEvent event) throws Exception {
     super.onConnect(event);
     // Enables whispers to be received
     event.getBot().sendRaw().rawLineNow("CAP REQ :twitch.tv/commands");
