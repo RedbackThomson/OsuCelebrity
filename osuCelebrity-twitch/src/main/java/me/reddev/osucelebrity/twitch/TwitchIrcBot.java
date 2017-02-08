@@ -132,7 +132,7 @@ public class TwitchIrcBot extends AbstractIrcBot {
     String message = event.getMessage();
     // Search through for command calls
     if (!message.startsWith(settings.getTwitchIrcCommand())) {
-      log.debug("Received Twitch message from {}: {}", event.getUser().getNick(), message);
+      log.debug("Received Twitch message from {}: {}", event.getUserHostmask().getNick(), message);
       return;
     }
 
@@ -141,14 +141,14 @@ public class TwitchIrcBot extends AbstractIrcBot {
     PersistenceManager pm = pmf.getPersistenceManager();
     try {
       for (CommandHandler commandHandler : handlers) {
-        if (commandHandler.handle(event, message, event.getUser().getNick(), pm)) {
+        if (commandHandler.handle(event, message, event.getUserHostmask().getNick(), pm)) {
           return;
         }
       }
-      log.debug("Received unknown twitch command from {}: {}", event.getUser().getNick(), message);
+      log.debug("Received unknown twitch command from {}: {}", event.getUserHostmask().getNick(), message);
     } catch (Exception e) {
       Consumer<String> messager =
-          x -> whisperBot.whisper(event.getUser().getNick(), x);
+          x -> whisperBot.whisper(event.getUserHostmask().getNick(), x);
       UserException.handleException(log, e, messager);
     } finally {
       pm.close();
@@ -195,7 +195,7 @@ public class TwitchIrcBot extends AbstractIrcBot {
   }
   
   void requireMod(MessageEvent event) throws UserException {
-    if (!twitchApi.isModerator(event.getUser().getNick())) {
+    if (!twitchApi.isModerator(event.getUserHostmask().getNick())) {
       throw new UserException("You're not a mod.");
     }
   }
@@ -203,8 +203,7 @@ public class TwitchIrcBot extends AbstractIrcBot {
   void handleAdvance(MessageEvent event, String message, String twitchUserName,
       PersistenceManager pm) throws UserException, IOException {
     if (spectator.advanceConditional(pm, message)) {
-      sendMessage(String.format(TwitchResponses.SKIPPED_FORCE, message, event.getUser()
-          .getNick()));
+      sendMessage(String.format(TwitchResponses.SKIPPED_FORCE, message, event.getUserHostmask().getNick()));
     }
   }
   
@@ -213,7 +212,7 @@ public class TwitchIrcBot extends AbstractIrcBot {
     OsuUser ircUser = getUserOrThrow(pm, message, TimeUnit.DAYS.toMillis(1));
     if (spectator.promote(pm, ircUser)) {
       sendMessage(String.format(TwitchResponses.SPECTATE_FORCE,
-          event.getUser().getNick(), message));
+          event.getUserHostmask().getNick(), message));
     }
   }
 
@@ -277,7 +276,7 @@ public class TwitchIrcBot extends AbstractIrcBot {
     spectator.boost(pm, getUserOrThrow(pm, boostedUser, 0));
 
     event.getChannel().send()
-        .message(String.format(TwitchResponses.BOOST_QUEUE, boostedUser, event.getUser().getNick()));
+        .message(String.format(TwitchResponses.BOOST_QUEUE, boostedUser, event.getUserHostmask().getNick()));
   }
   
   void handleTimeout(MessageEvent event, String message, String twitchUserName,

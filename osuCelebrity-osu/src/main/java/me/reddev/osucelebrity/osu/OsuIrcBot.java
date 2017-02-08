@@ -156,12 +156,12 @@ public class OsuIrcBot extends AbstractIrcBot {
 
   @Override
   public void onPrivateMessage(PrivateMessageEvent event) {
-    if (event.getUser().getNick().equals(ircSettings.getOsuCommandUser())) {
+    if (event.getUserHostmask().getNick().equals(ircSettings.getOsuCommandUser())) {
       handleBanchoBotResponse(event.getMessage());
       return;
     }
 
-    log.debug("received message from {}: {}", event.getUser().getNick(), event.getMessage());
+    log.debug("received message from {}: {}", event.getUserHostmask().getNick(), event.getMessage());
     
     if (!event.getMessage().startsWith(ircSettings.getOsuIrcCommand())) {
       return;
@@ -169,7 +169,7 @@ public class OsuIrcBot extends AbstractIrcBot {
     PersistenceManager pm = pmf.getPersistenceManager();
     try {
 
-      OsuIrcUser ircUser = osuApi.getIrcUser(event.getUser().getNick(), pm, 0);
+      OsuIrcUser ircUser = osuApi.getIrcUser(event.getUserHostmask().getNick(), pm, 0);
       OsuUser osuUser = ircUser != null ? ircUser.getUser() : null;
       if (osuUser == null) {
         throw new UserException("unrecognized user name");
@@ -467,15 +467,15 @@ public class OsuIrcBot extends AbstractIrcBot {
   @Override
   public void onJoin(JoinEvent event) {
     // Ask for subscription and admin information
-    if (event.getUser().getNick().equalsIgnoreCase(ircSettings.getOsuIrcUsername())) {
+    if (event.getUserHostmask().getNick().equalsIgnoreCase(ircSettings.getOsuIrcUsername())) {
       log.info(String.format("Joined %s", event.getChannel().getName()));
     }
-    onlineUsers.add(event.getUser().getNick());
+    onlineUsers.add(event.getUserHostmask().getNick());
   }
 
   @Override
   public void onQuit(QuitEvent event) throws Exception {
-    onlineUsers.remove(event.getUser().getNick());
+    onlineUsers.remove(event.getUserHostmask().getNick());
   }
 
   @Override
@@ -537,7 +537,7 @@ public class OsuIrcBot extends AbstractIrcBot {
   
   void respond(PrivateMessageEvent event, String response) {
     if (synchronizeThroughPinger(() -> event.respond(response))) {
-      log.debug("RESPONDED to {}: {}", event.getUser().getNick(), response);
+      log.debug("RESPONDED to {}: {}", event.getUserHostmask().getNick(), response);
     }
   }
 
