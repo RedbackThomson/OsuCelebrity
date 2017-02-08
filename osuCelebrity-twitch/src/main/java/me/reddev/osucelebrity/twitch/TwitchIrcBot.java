@@ -195,7 +195,7 @@ public class TwitchIrcBot extends AbstractIrcBot {
   }
   
   void requireMod(MessageEvent event) throws UserException {
-    if (!twitchApi.isModerator(event.getUserHostmask().getNick())) {
+    if (!"1".equals(event.getTags().get("mod"))) {
       throw new UserException("You're not a mod.");
     }
   }

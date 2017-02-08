@@ -29,7 +29,6 @@ import me.reddev.osucelebrity.twitch.TwitchIrcBot;
 import me.reddev.osucelebrity.twitch.TwitchIrcSettings;
 import me.reddev.osucelebrity.twitch.TwitchWhisperBot;
 import me.reddev.osucelebrity.twitch.api.Kraken;
-import me.reddev.osucelebrity.twitch.api.Tmi;
 import me.reddev.osucelebrity.twitchapi.TwitchApi;
 import me.reddev.osucelebrity.twitchapi.TwitchApiSettings;
 import org.glassfish.jersey.client.JerseyClientBuilder;
@@ -116,11 +115,5 @@ public class OsuCelebrityModule extends AbstractModule {
     return WebResourceFactory.newResource(Kraken.class,
         JerseyClientBuilder.newClient().target(settings.getTwitchApiRoot())
             .queryParam("client_id", settings.getTwitchClientId()));
-  }
-  
-  @Provides
-  public Tmi createTmi() {
-    return WebResourceFactory.newResource(Tmi.class,
-        JerseyClientBuilder.newClient().target("http://tmi.twitch.tv"));
   }
 }

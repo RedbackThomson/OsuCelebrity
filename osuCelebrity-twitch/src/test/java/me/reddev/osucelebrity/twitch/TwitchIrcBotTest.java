@@ -60,6 +60,8 @@ public class TwitchIrcBotTest extends AbstractJDOTest {
   @Mock
   User user;
   @Mock
+  ImmutableMap<String, String> tags;
+  @Mock
   OutputUser outputUser;
   @Mock
   Channel channel;
@@ -128,7 +130,7 @@ public class TwitchIrcBotTest extends AbstractJDOTest {
 
   @Test
   public void testQueue() throws Exception {
-    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!spec someone", ImmutableMap.of()));
+    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!spec someone", tags));
 
     verify(spectator).performEnqueue(
         any(),
@@ -140,7 +142,7 @@ public class TwitchIrcBotTest extends AbstractJDOTest {
   public void testQueueUntrusted() throws Exception {
     doThrow(new UserException("")).when(trust).checkTrust(any(), any());
     
-    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!spec someone", ImmutableMap.of()));
+    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!spec someone", tags));
 
     verifyZeroInteractions(spectator);
   }
@@ -148,7 +150,7 @@ public class TwitchIrcBotTest extends AbstractJDOTest {
   @Test
   public void testQueueWithComment() throws Exception {
     ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user,
-        "!spectate Q__Q    : best emoticon", ImmutableMap.of()));
+        "!spectate Q__Q    : best emoticon", tags));
 
     verify(spectator).performEnqueue(
         any(),
@@ -158,7 +160,7 @@ public class TwitchIrcBotTest extends AbstractJDOTest {
 
   @Test
   public void testQueueAlias() throws Exception {
-    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!vote someone", ImmutableMap.of()));
+    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!vote someone", tags));
 
     verify(spectator).performEnqueue(
         any(),
@@ -168,7 +170,7 @@ public class TwitchIrcBotTest extends AbstractJDOTest {
 
   @Test
   public void testDank() throws Exception {
-    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!dank", ImmutableMap.of()));
+    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!dank", tags));
 
     verify(spectator).vote(any(), eq("twitchIrcUser"), eq(VoteType.UP), eq("!dank"));
   }
@@ -177,14 +179,14 @@ public class TwitchIrcBotTest extends AbstractJDOTest {
   public void testDankUntrusted() throws Exception {
     doThrow(new UserException("")).when(trust).checkTrust(any(), any());
     
-    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!dank", ImmutableMap.of()));
+    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!dank", tags));
 
     verifyZeroInteractions(spectator);
   }
 
   @Test
   public void testSkip() throws Exception {
-    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!skip", ImmutableMap.of()));
+    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!skip", tags));
 
     verify(spectator).vote(any(), eq("twitchIrcUser"), eq(VoteType.DOWN), eq("!skip"));
   }
@@ -192,15 +194,15 @@ public class TwitchIrcBotTest extends AbstractJDOTest {
   @Test
   public void testForceSkip() throws Exception {
     when(spectator.advanceConditional(any(), any())).thenReturn(true);
-    when(twitchApi.isModerator(user.getNick())).thenReturn(true);
-    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!forceskip x", ImmutableMap.of()));
+    when(tags.get("mod")).thenReturn("1");
+    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!forceskip x", tags));
 
     verify(spectator).advanceConditional(any(), eq("x"));
   }
 
   @Test
   public void testForceSkipUnauthorized() throws Exception {
-    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!forceskip x", ImmutableMap.of()));
+    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!forceskip x", tags));
 
     verifyNoMoreInteractions(spectator);
   }
@@ -208,8 +210,8 @@ public class TwitchIrcBotTest extends AbstractJDOTest {
   @Test
   public void testForceSpec() throws Exception {
     when(spectator.promote(any(), any())).thenReturn(true);
-    when(twitchApi.isModerator(user.getNick())).thenReturn(true);
-    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!forcespec x", ImmutableMap.of()));
+    when(tags.get("mod")).thenReturn("1");
+    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!forcespec x", tags));
 
     verify(spectator).promote(any(), eq(osuApi.getUser("x", pmf.getPersistenceManagerProxy(), 0)));
   }
@@ -219,7 +221,7 @@ public class TwitchIrcBotTest extends AbstractJDOTest {
     when(osu.getClientStatus()).thenReturn(
         new OsuStatus(OsuStatus.Type.PLAYING, "Hatsune Miku - Senbonzakura (Short Ver.) [Rin]"));
 
-    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!np", ImmutableMap.of()));
+    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!np", tags));
 
     verify(outputChannel).message(any());
   }
@@ -228,7 +230,7 @@ public class TwitchIrcBotTest extends AbstractJDOTest {
   public void testNowPlayingOnlyWatching() throws Exception {
     when(osu.getClientStatus()).thenReturn(new OsuStatus(OsuStatus.Type.WATCHING, "SomePlayer"));
 
-    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!np", ImmutableMap.of()));
+    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!np", tags));
 
     verify(outputChannel, never()).message(any());
   }
@@ -236,23 +238,23 @@ public class TwitchIrcBotTest extends AbstractJDOTest {
   @Test
   public void testNotNowPlaying() throws Exception {
     when(osu.getClientStatus()).thenReturn(new OsuStatus(Type.CLOSED, null));
-    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!np", ImmutableMap.of()));
+    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!np", tags));
 
     verify(outputChannel, never()).message(any());
   }
 
   @Test
   public void testFixClient() throws Exception {
-    when(twitchApi.isModerator(user.getNick())).thenReturn(true);
-    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!fix", ImmutableMap.of()));
+    when(tags.get("mod")).thenReturn("1");
+    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!fix", tags));
 
     verify(osu).restartClient();
   }
 
   @Test
   public void testBoost() throws Exception {
-    when(twitchApi.isModerator(user.getNick())).thenReturn(true);
-    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!boost boosttarget", ImmutableMap.of()));
+    when(tags.get("mod")).thenReturn("1");
+    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!boost boosttarget", tags));
 
     verify(spectator).boost(any(),
         eq(osuApi.getUser("boosttarget", pmf.getPersistenceManager(), 0)));
@@ -260,8 +262,8 @@ public class TwitchIrcBotTest extends AbstractJDOTest {
 
   @Test
   public void testTimeout() throws Exception {
-    when(twitchApi.isModerator(user.getNick())).thenReturn(true);
-    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!timeout 60 timeouttarget", ImmutableMap.of()));
+    when(tags.get("mod")).thenReturn("1");
+    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!timeout 60 timeouttarget", tags));
 
     OsuUser target = osuApi.getUser("timeouttarget", pmf.getPersistenceManager(), 0);
 
@@ -270,53 +272,53 @@ public class TwitchIrcBotTest extends AbstractJDOTest {
 
   @Test
   public void testBanMap() throws Exception {
-    when(twitchApi.isModerator(user.getNick())).thenReturn(true);
-    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!banmaps ban this", ImmutableMap.of()));
+    when(tags.get("mod")).thenReturn("1");
+    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!banmaps ban this", tags));
 
     verify(spectator).addBannedMapFilter(any(), eq("ban this"));
   }
 
   @Test
   public void testChangeGameMode() throws Exception {
-    when(twitchApi.isModerator(user.getNick())).thenReturn(true);
+    when(tags.get("mod")).thenReturn("1");
 
-    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!gamemode taiko player", ImmutableMap.of()));
+    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!gamemode taiko player", tags));
     OsuUser player = osuApi.getUser("player", pmf.getPersistenceManager(), 0);
     assertEquals(GameModes.TAIKO, player.getGameMode());
 
-    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!gamemode ctb player", ImmutableMap.of()));
+    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!gamemode ctb player", tags));
     player = osuApi.getUser("player", pmf.getPersistenceManager(), 0);
     assertEquals(GameModes.CTB, player.getGameMode());
 
-    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!gamemode mania player", ImmutableMap.of()));
+    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!gamemode mania player", tags));
     player = osuApi.getUser("player", pmf.getPersistenceManager(), 0);
     assertEquals(GameModes.MANIA, player.getGameMode());
 
-    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!gamemode osu player", ImmutableMap.of()));
+    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!gamemode osu player", tags));
     player = osuApi.getUser("player", pmf.getPersistenceManager(), 0);
     assertEquals(GameModes.OSU, player.getGameMode());
   }
 
   @Test
   public void testExtend() throws Exception {
-    when(twitchApi.isModerator(user.getNick())).thenReturn(true);
-    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!extend someplayer", ImmutableMap.of()));
+    when(tags.get("mod")).thenReturn("1");
+    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!extend someplayer", tags));
 
     verify(spectator).extendConditional(any(), eq("someplayer"));
   }
 
   @Test
   public void testFreeze() throws Exception {
-    when(twitchApi.isModerator(user.getNick())).thenReturn(true);
-    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!freeze", ImmutableMap.of()));
+    when(tags.get("mod")).thenReturn("1");
+    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!freeze", tags));
 
     verify(spectator).setFrozen(true);
   }
 
   @Test
   public void testUnfreeze() throws Exception {
-    when(twitchApi.isModerator(user.getNick())).thenReturn(true);
-    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!unfreeze", ImmutableMap.of()));
+    when(tags.get("mod")).thenReturn("1");
+    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!unfreeze", tags));
 
     verify(spectator).setFrozen(false);
   }
@@ -329,7 +331,7 @@ public class TwitchIrcBotTest extends AbstractJDOTest {
     when(twitch.getUser(any(), eq("twitchIrcUser"), anyLong(), anyBoolean())).thenReturn(userObject);
 
     // invoke command
-    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!link", ImmutableMap.of()));
+    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!link", tags));
 
     // verify that a link string has been set and that it was whispered to the user
     assertNotNull(userObject.getLinkString());
@@ -344,7 +346,7 @@ public class TwitchIrcBotTest extends AbstractJDOTest {
     when(twitch.getUser(any(), eq("twitchIrcUser"), anyLong(), anyBoolean())).thenReturn(userObject);
 
     // invoke command
-    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!link", ImmutableMap.of()));
+    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!link", tags));
 
     // verify that no link string has been set
     assertNull(userObject.getLinkString());
@@ -355,7 +357,7 @@ public class TwitchIrcBotTest extends AbstractJDOTest {
     when(spectator.getQueuePosition(any(), eq(osuUser))).thenReturn(420);
     
     ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!position "
-        + osuUser.getUserName(), ImmutableMap.of()));
+        + osuUser.getUserName(), tags));
 
     verify(outputChannel).message(String.format(OsuResponses.POSITION, osuUser.getUserName(), 420));
   }
@@ -365,7 +367,7 @@ public class TwitchIrcBotTest extends AbstractJDOTest {
     when(spectator.getQueuePosition(any(), eq(osuUser))).thenReturn(-1);
     
     ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!position "
-        + osuUser.getUserName(), ImmutableMap.of()));
+        + osuUser.getUserName(), tags));
 
     verify(whisperBot).whisper("twitchIrcUser", String.format(OsuResponses.NOT_IN_QUEUE, osuUser.getUserName()));
   }
@@ -377,7 +379,7 @@ public class TwitchIrcBotTest extends AbstractJDOTest {
     when(spectator.getCurrentPlayer(any())).thenReturn(currentPlayer);
     when(twitchApi.getReplayLink(currentPlayer)).thenReturn(new URL("http://rightthere"));
     
-    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!replay", ImmutableMap.of()));
+    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!replay", tags));
 
     verify(outputChannel).message(contains("rightthere"));
     verify(outputChannel).message(contains("currentPlayer"));
@@ -391,7 +393,7 @@ public class TwitchIrcBotTest extends AbstractJDOTest {
     
     when(twitchApi.getReplayLink(specificPlayer)).thenReturn(new URL("http://rightthere"));
     
-    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!replay specificPlayer", ImmutableMap.of()));
+    ircBot.onMessage(new MessageEvent(bot, channel, settings.getTwitchIrcChannel(), user, user, "!replay specificPlayer", tags));
 
     verify(outputChannel).message(contains("rightthere"));
     verify(outputChannel).message(contains("specificPlayer"));
