@@ -7,24 +7,12 @@ import org.pircbotx.hooks.events.ConnectEvent;
 import org.pircbotx.hooks.events.DisconnectEvent;
 import org.slf4j.Logger;
 
-import java.io.IOException;
-import java.net.Socket;
 import java.util.concurrent.CountDownLatch;
 import java.util.stream.Collectors;
 
 public abstract class AbstractIrcBot extends ListenerAdapter implements Runnable {
-  public static class PublicSocketBot extends PircBotX {
-    public PublicSocketBot(Configuration configuration) {
-      super(configuration);
-    }
 
-    @Override
-    public Socket getSocket() {
-      return super.getSocket();
-    }
-  }
-
-  private PublicSocketBot bot;
+  private PircBotX bot;
   
   protected abstract Configuration getConfiguration() throws Exception;
   
@@ -37,7 +25,7 @@ public abstract class AbstractIrcBot extends ListenerAdapter implements Runnable
    */
   public void run() {
     try {
-      bot = new PublicSocketBot(getConfiguration());
+      bot = new PircBotX(getConfiguration());
 
       // since new pircbotx has fancy stuff with multiple servers
       // lets also do fancy with possible multiple servers
@@ -51,24 +39,8 @@ public abstract class AbstractIrcBot extends ListenerAdapter implements Runnable
     }
   }
   
-  public PublicSocketBot getBot() {
+  public PircBotX getBot() {
     return bot;
-  }
-
-  /**
-   * Disconnects from the IRC server.
-   */
-  public void forceDisconnect() {
-    try {
-      bot.getSocket().close();
-    } catch (IOException e) {
-      getLog().error("exception while disconnecting osu IRC bot", e);
-    }
-  }
-  
-  public boolean isConnected() {
-    Socket socket = bot.getSocket();
-    return socket != null && socket.isConnected() && !socket.isClosed();
   }
 
   @Override

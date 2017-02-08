@@ -24,8 +24,6 @@ import org.pircbotx.hooks.events.JoinEvent;
 
 import com.google.common.collect.ImmutableList;
 
-import me.reddev.osucelebrity.AbstractIrcBot.PublicSocketBot;
-
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -71,8 +69,6 @@ public class OsuIrcBotTest extends AbstractJDOTest {
   @Mock
   OsuIrcSettings settings;
   @Mock
-  PublicSocketBot pircBotX;
-  @Mock
   OutputIRC ourputIrc;
   @Mock
   Osu osu;
@@ -104,7 +100,7 @@ public class OsuIrcBotTest extends AbstractJDOTest {
       return null;
     }).when(outputUser).message(anyString());
     
-    when(pircBotX.sendIRC()).thenReturn(ourputIrc);
+    when(bot.sendIRC()).thenReturn(ourputIrc);
 
     ircBot = new OsuIrcBot(osu, osuApi, settings, pmf, spectator, clock, twitch, new Pinger() {
       @Override
@@ -113,8 +109,8 @@ public class OsuIrcBotTest extends AbstractJDOTest {
       }
     }) {
       @Override
-      public PublicSocketBot getBot() {
-        return pircBotX;
+      public PircBotX getBot() {
+        return bot;
       }
     };
   }
