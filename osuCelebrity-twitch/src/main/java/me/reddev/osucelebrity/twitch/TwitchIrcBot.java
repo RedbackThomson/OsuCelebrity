@@ -27,6 +27,7 @@ import me.reddev.osucelebrity.osu.OsuUser;
 import me.reddev.osucelebrity.osuapi.OsuApi;
 import me.reddev.osucelebrity.twitchapi.TwitchApi;
 import org.pircbotx.Configuration;
+import org.pircbotx.cap.EnableCapHandler;
 import org.pircbotx.hooks.events.JoinEvent;
 import org.pircbotx.hooks.events.MessageEvent;
 import org.slf4j.Logger;
@@ -110,6 +111,10 @@ public class TwitchIrcBot extends AbstractIrcBot {
   protected Configuration getConfiguration() {
     return new Configuration.Builder()
             .setName(settings.getTwitchIrcUsername())
+            // Ask for tags
+            .addCapHandler(new EnableCapHandler("twitch.tv/tags"))
+            // Ask for subscription and admin information
+            .addCapHandler(new EnableCapHandler("twitch.tv/membership"))
             .setLogin(settings.getTwitchIrcUsername())
             .addListener(this)
             .addServer(settings.getTwitchIrcHost(), settings.getTwitchIrcPort())
@@ -401,9 +406,7 @@ public class TwitchIrcBot extends AbstractIrcBot {
 
   @Override
   public void onJoin(JoinEvent event) {
-    if (event.getUser().getLogin().equalsIgnoreCase(settings.getTwitchIrcUsername())) {
-      // Ask for subscription and admin information
-      event.getBot().sendRaw().rawLine("CAP REQ :twitch.tv/membership");
+    if (event.getUserHostmask().getLogin().equalsIgnoreCase(settings.getTwitchIrcUsername())) {
       log.info(String.format("Joined %s", event.getChannel().getName()));
     }
   }
