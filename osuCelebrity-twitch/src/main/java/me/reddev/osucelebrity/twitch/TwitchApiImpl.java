@@ -10,8 +10,6 @@ import me.reddev.osucelebrity.core.QueuedPlayer;
 import me.reddev.osucelebrity.core.StatusWindow;
 import me.reddev.osucelebrity.twitch.api.Kraken;
 import me.reddev.osucelebrity.twitch.api.KrakenVideo;
-import me.reddev.osucelebrity.twitch.api.Tmi;
-import me.reddev.osucelebrity.twitch.api.TmiChatters;
 import me.reddev.osucelebrity.twitchapi.TwitchApi;
 import me.reddev.osucelebrity.twitchapi.TwitchApiUser;
 import org.apache.commons.lang3.StringUtils;
@@ -22,12 +20,9 @@ import org.mapstruct.Mappings;
 
 import java.io.IOException;
 import java.net.URL;
-import java.util.Collections;
-import java.util.List;
 import java.util.Optional;
 import java.util.function.Supplier;
 
-import javax.annotation.CheckForNull;
 import javax.inject.Inject;
 import javax.jdo.PersistenceManager;
 import javax.ws.rs.ProcessingException;
@@ -48,37 +43,6 @@ public class TwitchApiImpl implements TwitchApi {
   private final Clock clock;
   private final StatusWindow statusWindow;
   private final Kraken kraken;
-  private final Tmi tmi;
-
-  @CheckForNull
-  TmiChatters channelChatters = null;
-
-  /**
-   * updates channel chatters through chatters API. exceptions are logged.
-   */
-  public void updateChatters() {
-    try {
-      channelChatters = rewrapIoExceptions(
-          () -> tmi.getUser(ircSettings.getTwitchIrcUsername().toLowerCase()).getChatters());
-      statusWindow.setTwitchMods(channelChatters.getChatters().getModerators());
-    } catch (ServerErrorException e) {
-      log.warn("Server error while updating chatters: {}", e.getMessage());
-    } catch (Exception e) {
-      log.error("Exception while updating chatters", e);
-    }
-  }
-
-  @Override
-  public boolean isModerator(String username) {
-    List<String> onlineMods = getOnlineMods();
-    return onlineMods.contains(username.toLowerCase());
-  }
-
-  @Override
-  public List<String> getOnlineMods() {
-    return channelChatters != null ? channelChatters.getChatters().getModerators() : Collections
-        .emptyList();
-  }
 
   @Override
   public TwitchApiUser getUser(PersistenceManager pm, String username, long maxAge,

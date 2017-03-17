@@ -27,7 +27,7 @@ import me.reddev.osucelebrity.osu.OsuUser;
 import me.reddev.osucelebrity.osuapi.OsuApi;
 import me.reddev.osucelebrity.twitchapi.TwitchApi;
 import org.pircbotx.Configuration;
-import org.pircbotx.PircBotX;
+import org.pircbotx.cap.EnableCapHandler;
 import org.pircbotx.hooks.events.JoinEvent;
 import org.pircbotx.hooks.events.MessageEvent;
 import org.slf4j.Logger;
@@ -51,13 +51,13 @@ import javax.jdo.PersistenceManagerFactory;
 public class TwitchIrcBot extends AbstractIrcBot {
   @FunctionalInterface
   interface CommandHandler {
-    boolean handle(MessageEvent<PircBotX> event, String message, String twitchUserName,
+    boolean handle(MessageEvent event, String message, String twitchUserName,
         PersistenceManager pm) throws UserException, IOException;
   }
 
   @FunctionalInterface
   interface ConfirmedCommandHandler {
-    void handle(MessageEvent<PircBotX> event, String arguments, String twitchUserName,
+    void handle(MessageEvent event, String arguments, String twitchUserName,
         PersistenceManager pm) throws UserException, IOException;
   }
 
@@ -108,13 +108,18 @@ public class TwitchIrcBot extends AbstractIrcBot {
   }
 
   @Override
-  protected Configuration<PircBotX> getConfiguration() {
-    return new Configuration.Builder<PircBotX>()
+  protected Configuration getConfiguration() {
+    return new Configuration.Builder()
             .setName(settings.getTwitchIrcUsername())
+            // Ask for tags
+            .addCapHandler(new EnableCapHandler("twitch.tv/tags"))
+            // Ask for subscription and admin information
+            .addCapHandler(new EnableCapHandler("twitch.tv/membership"))
             .setLogin(settings.getTwitchIrcUsername())
             .addListener(this)
-            .setServer(settings.getTwitchIrcHost(), settings.getTwitchIrcPort(),
-                settings.getTwitchToken()).setAutoReconnect(true)
+            .addServer(settings.getTwitchIrcHost(), settings.getTwitchIrcPort())
+            .setServerPassword(settings.getTwitchToken())
+            .setAutoReconnect(true)
             .addAutoJoinChannel(settings.getTwitchIrcChannel()).buildConfiguration();
   }
 
@@ -128,11 +133,11 @@ public class TwitchIrcBot extends AbstractIrcBot {
   }
 
   @Override
-  public void onMessage(MessageEvent<PircBotX> event) {
+  public void onMessage(MessageEvent event) {
     String message = event.getMessage();
     // Search through for command calls
     if (!message.startsWith(settings.getTwitchIrcCommand())) {
-      log.debug("Received Twitch message from {}: {}", event.getUser().getNick(), message);
+      log.debug("Received Twitch message from {}: {}", event.getUserHostmask().getNick(), message);
       return;
     }
 
@@ -141,21 +146,21 @@ public class TwitchIrcBot extends AbstractIrcBot {
     PersistenceManager pm = pmf.getPersistenceManager();
     try {
       for (CommandHandler commandHandler : handlers) {
-        if (commandHandler.handle(event, message, event.getUser().getNick(), pm)) {
+        if (commandHandler.handle(event, message, event.getUserHostmask().getNick(), pm)) {
           return;
         }
       }
-      log.debug("Received unknown twitch command from {}: {}", event.getUser().getNick(), message);
+      log.debug("Received unknown twitch command from {}: {}", event.getUserHostmask().getNick(), message);
     } catch (Exception e) {
       Consumer<String> messager =
-          x -> whisperBot.whisper(event.getUser().getNick(), x);
+          x -> whisperBot.whisper(event.getUserHostmask().getNick(), x);
       UserException.handleException(log, e, messager);
     } finally {
       pm.close();
     }
   }
 
-  void handleQueue(MessageEvent<PircBotX> event, String targetUser, String requesterNick,
+  void handleQueue(MessageEvent event, String targetUser, String requesterNick,
       PersistenceManager pm) throws UserException, IOException {
     checkTrust(pm, requesterNick);
     
@@ -174,7 +179,7 @@ public class TwitchIrcBot extends AbstractIrcBot {
     trust.checkTrust(pm, twitch.getUser(pm, subject, 60 * 1000L, true));
   }
 
-  boolean handleVote(MessageEvent<PircBotX> event, String message, String twitchUserName,
+  boolean handleVote(MessageEvent event, String message, String twitchUserName,
       PersistenceManager pm) throws UserException, IOException {
     VoteType type = null;
     if (Commands.detect(message, UPVOTE) != null) {
@@ -194,26 +199,25 @@ public class TwitchIrcBot extends AbstractIrcBot {
     return true;
   }
   
-  void requireMod(MessageEvent<PircBotX> event) throws UserException {
-    if (!twitchApi.isModerator(event.getUser().getNick())) {
+  void requireMod(MessageEvent event) throws UserException {
+    if (!"1".equals(event.getTags().get("mod"))) {
       throw new UserException("You're not a mod.");
     }
   }
 
-  void handleAdvance(MessageEvent<PircBotX> event, String message, String twitchUserName,
+  void handleAdvance(MessageEvent event, String message, String twitchUserName,
       PersistenceManager pm) throws UserException, IOException {
     if (spectator.advanceConditional(pm, message)) {
-      sendMessage(String.format(TwitchResponses.SKIPPED_FORCE, message, event.getUser()
-          .getNick()));
+      sendMessage(String.format(TwitchResponses.SKIPPED_FORCE, message, event.getUserHostmask().getNick()));
     }
   }
   
-  void handleForceSpec(MessageEvent<PircBotX> event, String message, String twitchUserName,
+  void handleForceSpec(MessageEvent event, String message, String twitchUserName,
       PersistenceManager pm) throws UserException, IOException {
     OsuUser ircUser = getUserOrThrow(pm, message, TimeUnit.DAYS.toMillis(1));
     if (spectator.promote(pm, ircUser)) {
       sendMessage(String.format(TwitchResponses.SPECTATE_FORCE,
-          event.getUser().getNick(), message));
+          event.getUserHostmask().getNick(), message));
     }
   }
 
@@ -227,7 +231,7 @@ public class TwitchIrcBot extends AbstractIrcBot {
     return ircUser;
   }
   
-  void handlePosition(MessageEvent<PircBotX> event, String message, String twitchUserName,
+  void handlePosition(MessageEvent event, String message, String twitchUserName,
       PersistenceManager pm) throws UserException, IOException {
     OsuUser ircUser = getUserOrThrow(pm, message, 0);
     int position = spectator.getQueuePosition(pm, ircUser);
@@ -240,7 +244,7 @@ public class TwitchIrcBot extends AbstractIrcBot {
     }
   }
   
-  void handleNowPlaying(MessageEvent<PircBotX> event, String message, String twitchUserName,
+  void handleNowPlaying(MessageEvent event, String message, String twitchUserName,
       PersistenceManager pm) throws UserException, IOException {
     QueuedPlayer player = spectator.getCurrentPlayer(pm);
     if (player == null) {
@@ -263,7 +267,7 @@ public class TwitchIrcBot extends AbstractIrcBot {
     event.getChannel().send().message(formatted);
   }
   
-  void handleFixClient(MessageEvent<PircBotX> event, String message, String twitchUserName,
+  void handleFixClient(MessageEvent event, String message, String twitchUserName,
       PersistenceManager pm) throws UserException, IOException {
     try {
       osu.restartClient();
@@ -272,15 +276,15 @@ public class TwitchIrcBot extends AbstractIrcBot {
     }
   }
   
-  void handleBoost(MessageEvent<PircBotX> event, String boostedUser, String twitchUserName,
+  void handleBoost(MessageEvent event, String boostedUser, String twitchUserName,
       PersistenceManager pm) throws UserException, IOException {
     spectator.boost(pm, getUserOrThrow(pm, boostedUser, 0));
 
     event.getChannel().send()
-        .message(String.format(TwitchResponses.BOOST_QUEUE, boostedUser, event.getUser().getNick()));
+        .message(String.format(TwitchResponses.BOOST_QUEUE, boostedUser, event.getUserHostmask().getNick()));
   }
   
-  void handleTimeout(MessageEvent<PircBotX> event, String message, String twitchUserName,
+  void handleTimeout(MessageEvent event, String message, String twitchUserName,
       PersistenceManager pm) throws UserException, IOException {
     String[] split = message.split(" ", 2);
     
@@ -293,14 +297,14 @@ public class TwitchIrcBot extends AbstractIrcBot {
         .message(String.format(TwitchResponses.TIMEOUT, timeoutUser.getUserName(), minutes));
   }
   
-  void handleBannedMapsFilter(MessageEvent<PircBotX> event, String message,
+  void handleBannedMapsFilter(MessageEvent event, String message,
       String twitchUserName, PersistenceManager pm) throws UserException, IOException {
     spectator.addBannedMapFilter(pm, message);
 
     event.getChannel().send().message(String.format(TwitchResponses.ADDED_BANNED_MAPS_FILTER));
   }
   
-  void handleGameMode(MessageEvent<PircBotX> event, String message,
+  void handleGameMode(MessageEvent event, String message,
       String twitchUserName, PersistenceManager pm) throws UserException, IOException {
     String[] split = message.split(" ", 2);
 
@@ -321,22 +325,22 @@ public class TwitchIrcBot extends AbstractIrcBot {
     event.getChannel().send().message(Responses.GAME_MODE_CHANGED);
   }
   
-  void handleExtend(MessageEvent<PircBotX> event, String targetUser,
+  void handleExtend(MessageEvent event, String targetUser,
       String twitchUserName, PersistenceManager pm) throws UserException, IOException {
     spectator.extendConditional(pm, targetUser);
   }
 
-  void handleFreeze(MessageEvent<PircBotX> event, String message,
+  void handleFreeze(MessageEvent event, String message,
       String twitchUserName, PersistenceManager pm) throws UserException, IOException {
     spectator.setFrozen(true);
   }
 
-  void handleUnfreeze(MessageEvent<PircBotX> event, String message,
+  void handleUnfreeze(MessageEvent event, String message,
       String twitchUserName, PersistenceManager pm) throws UserException, IOException {
     spectator.setFrozen(false);
   }
   
-  void handleLink(MessageEvent<PircBotX> event, String message,
+  void handleLink(MessageEvent event, String message,
       String twitchUserName, PersistenceManager pm) throws UserException, IOException {
     TwitchUser user = twitch.getUser(pm, twitchUserName, 60 * 1000L, true);
     
@@ -350,7 +354,7 @@ public class TwitchIrcBot extends AbstractIrcBot {
         String.format(TwitchResponses.LINK_INSTRUCTIONS, user.getLinkString()));
   }
 
-  void handleReplayCurrent(MessageEvent<PircBotX> event, String message,
+  void handleReplayCurrent(MessageEvent event, String message,
       String twitchUserName, PersistenceManager pm) throws UserException, IOException {
     QueuedPlayer currentPlayer = spectator.getCurrentPlayer(pm);
     if (currentPlayer == null) {
@@ -371,7 +375,7 @@ public class TwitchIrcBot extends AbstractIrcBot {
                 replayLink.toString()));
   }
 
-  void handleReplaySpecific(MessageEvent<PircBotX> event, String targetPlayer,
+  void handleReplaySpecific(MessageEvent event, String targetPlayer,
       String twitchUserName, PersistenceManager pm) throws UserException, IOException {
     QueuedPlayer player;
     try (JDOQuery<QueuedPlayer> query = new JDOQuery<>(pm).select(queuedPlayer).from(queuedPlayer)) {
@@ -401,10 +405,8 @@ public class TwitchIrcBot extends AbstractIrcBot {
   }
 
   @Override
-  public void onJoin(JoinEvent<PircBotX> event) {
-    if (event.getUser().getLogin().equalsIgnoreCase(settings.getTwitchIrcUsername())) {
-      // Ask for subscription and admin information
-      event.getBot().sendRaw().rawLine("CAP REQ :twitch.tv/membership");
+  public void onJoin(JoinEvent event) {
+    if (event.getUserHostmask().getLogin().equalsIgnoreCase(settings.getTwitchIrcUsername())) {
       log.info(String.format("Joined %s", event.getChannel().getName()));
     }
   }

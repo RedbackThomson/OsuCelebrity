@@ -43,7 +43,6 @@ import me.reddev.osucelebrity.twitch.TwitchUser;
 import org.apache.commons.lang3.tuple.Pair;
 import org.pircbotx.Configuration;
 import org.pircbotx.Configuration.Builder;
-import org.pircbotx.PircBotX;
 import org.pircbotx.hooks.events.JoinEvent;
 import org.pircbotx.hooks.events.PrivateMessageEvent;
 import org.pircbotx.hooks.events.QuitEvent;
@@ -77,13 +76,13 @@ import javax.jdo.PersistenceManagerFactory;
 public class OsuIrcBot extends AbstractIrcBot {
   @FunctionalInterface
   interface CommandHandler {
-    boolean handle(PrivateMessageEvent<PircBotX> event, String message, OsuUser user,
+    boolean handle(PrivateMessageEvent event, String message, OsuUser user,
         PersistenceManager pm) throws UserException, IOException, InterruptedException;
   }
 
   @FunctionalInterface
   interface ConfirmedCommandHandler {
-    void handle(PrivateMessageEvent<PircBotX> event, String message, OsuUser user,
+    void handle(PrivateMessageEvent event, String message, OsuUser user,
         PersistenceManager pm) throws UserException, IOException, InterruptedException;
   }
   
@@ -124,14 +123,15 @@ public class OsuIrcBot extends AbstractIrcBot {
   }
   
   @Override
-  protected Configuration<PircBotX> getConfiguration() {
-    Builder<PircBotX> configBuilder =
-        new Configuration.Builder<PircBotX>()
+  protected Configuration getConfiguration() {
+    Builder configBuilder =
+        new Configuration.Builder()
             .setName(ircSettings.getOsuIrcUsername())
             .setLogin(ircSettings.getOsuIrcUsername())
             .addListener(this)
-            .setServer(ircSettings.getOsuIrcHost(), ircSettings.getOsuIrcPort(),
-                ircSettings.getOsuIrcPassword()).setAutoReconnect(true).setMessageDelay(500);
+            .addServer(ircSettings.getOsuIrcHost(), ircSettings.getOsuIrcPort())
+            .setServerPassword(ircSettings.getOsuIrcPassword())
+            .setAutoReconnect(true).setMessageDelay(500);
     Stream.of(ircSettings.getOsuIrcAutoJoin().split(",")).forEach(
         configBuilder::addAutoJoinChannel);
     return configBuilder.buildConfiguration();
@@ -155,13 +155,13 @@ public class OsuIrcBot extends AbstractIrcBot {
   // http://site.pircbotx.googlecode.com/hg-history/2.0.1/apidocs/index.html
 
   @Override
-  public void onPrivateMessage(PrivateMessageEvent<PircBotX> event) {
-    if (event.getUser().getNick().equals(ircSettings.getOsuCommandUser())) {
+  public void onPrivateMessage(PrivateMessageEvent event) {
+    if (event.getUserHostmask().getNick().equals(ircSettings.getOsuCommandUser())) {
       handleBanchoBotResponse(event.getMessage());
       return;
     }
 
-    log.debug("received message from {}: {}", event.getUser().getNick(), event.getMessage());
+    log.debug("received message from {}: {}", event.getUserHostmask().getNick(), event.getMessage());
     
     if (!event.getMessage().startsWith(ircSettings.getOsuIrcCommand())) {
       return;
@@ -169,7 +169,7 @@ public class OsuIrcBot extends AbstractIrcBot {
     PersistenceManager pm = pmf.getPersistenceManager();
     try {
 
-      OsuIrcUser ircUser = osuApi.getIrcUser(event.getUser().getNick(), pm, 0);
+      OsuIrcUser ircUser = osuApi.getIrcUser(event.getUserHostmask().getNick(), pm, 0);
       OsuUser osuUser = ircUser != null ? ircUser.getUser() : null;
       if (osuUser == null) {
         throw new UserException("unrecognized user name");
@@ -263,7 +263,7 @@ public class OsuIrcBot extends AbstractIrcBot {
     };
   }
   
-  void handleQueue(PrivateMessageEvent<PircBotX> event, String queueTarget, OsuUser user,
+  void handleQueue(PrivateMessageEvent event, String queueTarget, OsuUser user,
       PersistenceManager pm) throws IOException, UserException {
     // Permits: !spec username : reason
     // Example: !spec Tillerino: for awesomeness Keepo
@@ -278,7 +278,7 @@ public class OsuIrcBot extends AbstractIrcBot {
         msg -> respond(event, msg), msg -> respond(event, msg));
   }
 
-  void handleQueueSilent(PrivateMessageEvent<PircBotX> event, String queueTarget, OsuUser user,
+  void handleQueueSilent(PrivateMessageEvent event, String queueTarget, OsuUser user,
       PersistenceManager pm) throws IOException, UserException {
     if (!user.getPrivilege().canSkip) {
       throw new UserException(UNAUTHORIZED);
@@ -294,7 +294,7 @@ public class OsuIrcBot extends AbstractIrcBot {
         msg -> respond(event, msg));
   }
 
-  void handleSpec(PrivateMessageEvent<PircBotX> event, String message, OsuUser user,
+  void handleSpec(PrivateMessageEvent event, String message, OsuUser user,
       PersistenceManager pm) throws UserException, IOException {
     if (!user.getPrivilege().canSkip) {
       throw new UserException(UNAUTHORIZED);
@@ -308,7 +308,7 @@ public class OsuIrcBot extends AbstractIrcBot {
     }
   }
 
-  void handleSelfQueue(PrivateMessageEvent<PircBotX> event, String message, OsuUser user,
+  void handleSelfQueue(PrivateMessageEvent event, String message, OsuUser user,
       PersistenceManager pm) throws IOException {
     QueuedPlayer queueRequest = new QueuedPlayer(user, QueueSource.OSU, clock.getTime());
     EnqueueResult result =
@@ -320,7 +320,7 @@ public class OsuIrcBot extends AbstractIrcBot {
     }
   }
 
-  void handleSkip(PrivateMessageEvent<PircBotX> event, String message, OsuUser user,
+  void handleSkip(PrivateMessageEvent event, String message, OsuUser user,
       PersistenceManager pm) throws UserException, IOException {
     if (!user.getPrivilege().canSkip) {
       throw new UserException(UNAUTHORIZED);
@@ -332,7 +332,7 @@ public class OsuIrcBot extends AbstractIrcBot {
     }
   }
   
-  boolean handleMute(PrivateMessageEvent<PircBotX> event, String message, OsuUser user,
+  boolean handleMute(PrivateMessageEvent event, String message, OsuUser user,
       PersistenceManager pm) throws UserException, IOException {
     if (message.equalsIgnoreCase(MUTE)) {
       user.setAllowsNotifications(false);
@@ -347,7 +347,7 @@ public class OsuIrcBot extends AbstractIrcBot {
     return false;
   }
   
-  boolean handleOpt(PrivateMessageEvent<PircBotX> event, String message, OsuUser user,
+  boolean handleOpt(PrivateMessageEvent event, String message, OsuUser user,
       PersistenceManager pm) throws UserException, IOException {
     if (message.equalsIgnoreCase(OPTOUT)) {
       user.setAllowsSpectating(false);
@@ -368,7 +368,7 @@ public class OsuIrcBot extends AbstractIrcBot {
     return false;
   }
   
-  void handlePosition(PrivateMessageEvent<PircBotX> event, String message, OsuUser user,
+  void handlePosition(PrivateMessageEvent event, String message, OsuUser user,
       PersistenceManager pm) throws UserException, IOException {
     OsuUser requestedUser = osuApi.getUser(message, pm, 60 * 60 * 1000);
     if (requestedUser == null) {
@@ -385,7 +385,7 @@ public class OsuIrcBot extends AbstractIrcBot {
     }
   }
   
-  void handleSelfPosition(PrivateMessageEvent<PircBotX> event, String message, OsuUser user,
+  void handleSelfPosition(PrivateMessageEvent event, String message, OsuUser user,
       PersistenceManager pm) throws UserException, IOException {
     int position = spectator.getQueuePosition(pm, user);
     if (position != -1) {
@@ -397,7 +397,7 @@ public class OsuIrcBot extends AbstractIrcBot {
     }
   }
   
-  void handleGameMode(PrivateMessageEvent<PircBotX> event, String message, OsuUser user,
+  void handleGameMode(PrivateMessageEvent event, String message, OsuUser user,
       PersistenceManager pm) throws UserException, IOException {
     if (message.equalsIgnoreCase("osu")) {
       user.setGameMode(GameModes.OSU);
@@ -414,7 +414,7 @@ public class OsuIrcBot extends AbstractIrcBot {
     respond(event, Responses.GAME_MODE_CHANGED);
   }
   
-  void handleRestartClient(PrivateMessageEvent<PircBotX> event, String message, OsuUser user,
+  void handleRestartClient(PrivateMessageEvent event, String message, OsuUser user,
       PersistenceManager pm) throws UserException, IOException, InterruptedException {
     if (!user.getPrivilege().canRestartClient) {
       throw new UserException(UNAUTHORIZED);
@@ -423,7 +423,7 @@ public class OsuIrcBot extends AbstractIrcBot {
     osu.restartClient();
   }
   
-  void handleMod(PrivateMessageEvent<PircBotX> event, String message, OsuUser user,
+  void handleMod(PrivateMessageEvent event, String message, OsuUser user,
       PersistenceManager pm) throws UserException, IOException, InterruptedException {
     if (!user.getPrivilege().canMod) {
       throw new UserException(UNAUTHORIZED);
@@ -438,7 +438,7 @@ public class OsuIrcBot extends AbstractIrcBot {
     respond(event, "modded");
   }
   
-  void handleLink(PrivateMessageEvent<PircBotX> event, String message, OsuUser user,
+  void handleLink(PrivateMessageEvent event, String message, OsuUser user,
       PersistenceManager pm) throws UserException, IOException {
     final TwitchUser userObject =
         JdoQueryUtil.getUnique(pm, twitchUser, twitchUser.linkString.eq(message)).orElseThrow(
@@ -465,21 +465,21 @@ public class OsuIrcBot extends AbstractIrcBot {
   }
 
   @Override
-  public void onJoin(JoinEvent<PircBotX> event) {
+  public void onJoin(JoinEvent event) {
     // Ask for subscription and admin information
-    if (event.getUser().getNick().equalsIgnoreCase(ircSettings.getOsuIrcUsername())) {
+    if (event.getUserHostmask().getNick().equalsIgnoreCase(ircSettings.getOsuIrcUsername())) {
       log.info(String.format("Joined %s", event.getChannel().getName()));
     }
-    onlineUsers.add(event.getUser().getNick());
+    onlineUsers.add(event.getUserHostmask().getNick());
   }
 
   @Override
-  public void onQuit(QuitEvent<PircBotX> event) throws Exception {
-    onlineUsers.remove(event.getUser().getNick());
+  public void onQuit(QuitEvent event) throws Exception {
+    onlineUsers.remove(event.getUserHostmask().getNick());
   }
 
   @Override
-  public void onServerResponse(ServerResponseEvent<PircBotX> event) throws Exception {
+  public void onServerResponse(ServerResponseEvent event) throws Exception {
     if (event.getCode() == 353) {
       ImmutableList<String> parsedResponse = event.getParsedResponse();
 
@@ -517,7 +517,7 @@ public class OsuIrcBot extends AbstractIrcBot {
   }
 
   @Override
-  public void onUnknown(UnknownEvent<PircBotX> event) throws Exception {
+  public void onUnknown(UnknownEvent event) throws Exception {
     pinger.handleUnknownEvent(event);
   }
   
@@ -535,9 +535,9 @@ public class OsuIrcBot extends AbstractIrcBot {
     }
   }
   
-  void respond(PrivateMessageEvent<?> event, String response) {
+  void respond(PrivateMessageEvent event, String response) {
     if (synchronizeThroughPinger(() -> event.respond(response))) {
-      log.debug("RESPONDED to {}: {}", event.getUser().getNick(), response);
+      log.debug("RESPONDED to {}: {}", event.getUserHostmask().getNick(), response);
     }
   }
 

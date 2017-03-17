@@ -13,21 +13,6 @@ import javax.jdo.PersistenceManager;
 @PassAndReturnNonnull
 public interface TwitchApi {
   /**
-   * Gets a list of moderators currently in a channel.
-   * 
-   * @return The list of moderator usernames in lowercase
-   */
-  List<String> getOnlineMods();
-
-  /**
-   * Determines whether a given user is a moderator of a channel.
-   * 
-   * @param username The username of the user
-   * @return True if the user is a moderator
-   */
-  boolean isModerator(String username);
-
-  /**
    * Retrieves the user from the API.
    * @param username username (all lower case).
    * @param maxAge if > 0, cached data up to this age can be returned.
